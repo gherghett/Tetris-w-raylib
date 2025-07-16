@@ -7,6 +7,7 @@
 #include "vectormath2i.h"
 #include "shapes.h"
 #include "screen_manager.h"
+#include "highscore.h"
 
 #define BLOCK_SIZE 20
 #define WELL_HEIGHT 20
@@ -43,6 +44,7 @@ GameState currentState;
 GameState unPausedState;
 static int staticBlocks[WELL_HEIGHT][WELL_WIDTH] = {{0}};
 Vector2i tetrisHolderPos;
+static int nextPiece;
 static int screenWidth;
 static int screenHeight;
 static Vector2i holderStartPos;
@@ -52,6 +54,7 @@ static char pointText[100];
 static int tetrisHolder[HOLDER_SIZE][HOLDER_SIZE];
 static float tickLength;
 static float lastTick;
+static bool newHighScore;
 
 void rotateGrid90(int src[HOLDER_SIZE][HOLDER_SIZE], int dest[HOLDER_SIZE][HOLDER_SIZE], int rotation) {
     // Normalize rotation to 0, 90, 180, 270
@@ -165,6 +168,11 @@ void gameTick(void) {
         if(holderTooHigh(tetrisHolder, tetrisHolderPos)) {
             // GAME OVER
             currentState = STATE_GAME_OVER;
+            int highscore = LoadHighscore();
+            if(points > highscore) {
+                SaveHighscore(points);
+                newHighScore = true;
+            }
             return;
         }
         //add holder content to static blocks
@@ -175,7 +183,8 @@ void gameTick(void) {
                 }
             }
         }
-        int newShapeIndex = GetRandomValue(0,6);
+        int newShapeIndex = nextPiece;
+        nextPiece = GetRandomValue(0,6);
         int color = GetRandomValue(1, 3);
         memcpy(tetrisHolder, shapes[newShapeIndex], sizeof(tetrisHolder));
         colorHolder(tetrisHolder, color);
@@ -221,10 +230,13 @@ void ScreenGameplay_Init(void)
     
     //players points
     points = 0;
+    newHighScore = false;
 
     // int emptyHolder[HOLDER_SIZE][HOLDER_SIZE] = {0};
     
     memcpy(tetrisHolder, four, sizeof(grib));
+    nextPiece = GetRandomValue(0,6);
+
 
     tickLength = 0.5;
     lastTick = tickLength;
@@ -342,8 +354,15 @@ void ScreenGameplay_Draw(void) {
         if(currentState == STATE_PAUSED)
             DrawText("PAUSED", 300, 20, 120, BLACK);
 
-        if(currentState == STATE_GAME_OVER)
-            DrawText("GAME OVER\npress enter to restart", 30, 100, 120, BLACK);
+        if(currentState == STATE_GAME_OVER) {
+            if(newHighScore) {
+                DrawText("NEW HIGH SCORE!", 30, 100, 80, BLACK);
+                DrawText(pointText, 30, 250, 50, RED);
+            }else {
+                DrawText("GAME OVER", 30, 100, 120, BLACK);
+            }
+            DrawText("press enter to restart", 30, 200, 30, BLACK);
+        }
 
 
     EndDrawing();
