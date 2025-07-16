@@ -20,6 +20,16 @@ typedef enum {
     STATE_PAUSED
 } GameState;
 
+typedef enum {
+    RED_BLOCK = 1,
+    BLUE_BLOCK = 2,
+    GREEN_BLOCK = 3
+} BlockColor;
+
+Color Colors[4] = {
+    WHITE, RED, BLUE, GREEN
+};
+
 GameState currentState;
 GameState unPausedState;
 static int staticBlocks[WELL_HEIGHT][WELL_WIDTH] = {{0}};
@@ -71,7 +81,6 @@ bool holderCollides(int holder[HOLDER_SIZE][HOLDER_SIZE], Vector2i position) {
                 if( x < 0 || x >= WELL_WIDTH || y >= WELL_HEIGHT)
                     return true;
     
-                
                 if(y >= 0 && y < WELL_HEIGHT && x >= 0 && x < WELL_WIDTH 
                     && staticBlocks[y][x]) 
                     return true;
@@ -79,6 +88,16 @@ bool holderCollides(int holder[HOLDER_SIZE][HOLDER_SIZE], Vector2i position) {
         }
     }
     return false;
+}
+
+void colorHolder(int holder[HOLDER_SIZE][HOLDER_SIZE], BlockColor color) {
+    for(int i = 0; i < HOLDER_SIZE; i++) {
+        for( int j = 0; j < HOLDER_SIZE; j++) {
+            if (holder[i][j]) {
+                holder[i][j] = (int)color;
+            }
+        }
+    }
 }
 
 bool holderTooHigh(int holder[HOLDER_SIZE][HOLDER_SIZE], Vector2i position) {
@@ -112,12 +131,14 @@ void gameTick(void) {
         for (int y = 0; y < HOLDER_SIZE; y++) {
             for (int x = 0; x < HOLDER_SIZE; x++) {
                 if(tetrisHolder[y][x]) {
-                    staticBlocks[y+tetrisHolderPos.y][x+tetrisHolderPos.x] = 1;
+                    staticBlocks[y+tetrisHolderPos.y][x+tetrisHolderPos.x] = tetrisHolder[y][x];
                 }
             }
         }
         int newShapeIndex = GetRandomValue(0,6);
+        int color = GetRandomValue(1, 3);
         memcpy(tetrisHolder, shapes[newShapeIndex], sizeof(tetrisHolder));
+        colorHolder(tetrisHolder, color);
         tetrisHolderPos = holderStartPos;
 
         int linesDeleted = 0;
@@ -256,8 +277,10 @@ void ScreenGameplay_Draw(void) {
         for(int i = 0; i < WELL_HEIGHT; i++) {
             for( int j = 0; j < WELL_WIDTH; j++) {
                 Rectangle rect = {wellPosition.x + j*BLOCK_SIZE, wellPosition.y + i*BLOCK_SIZE, BLOCK_SIZE, BLOCK_SIZE};
+                
                 if(staticBlocks[i][j]) {
-                    DrawRectanglePro(rect, (Vector2){0,0}, 0.0f, RED);
+                    Color color = Colors[staticBlocks[i][j]];
+                    DrawRectanglePro(rect, (Vector2){0,0}, 0.0f, color);
                 } else {
                     DrawRectangleLinesEx(rect, 3.0, LIGHTGRAY);
                 }
@@ -268,9 +291,10 @@ void ScreenGameplay_Draw(void) {
         for(int i = 0; i < HOLDER_SIZE; i++) {
             for(int j = 0; j < HOLDER_SIZE; j++){
                 if(tetrisHolder[i][j]) {
+                    Color color = Colors[tetrisHolder[i][j]];
                     block.x = wellPosition.x + tetrisHolderPos.x*BLOCK_SIZE + BLOCK_SIZE*j,
                     block.y = wellPosition.y + tetrisHolderPos.y*BLOCK_SIZE + BLOCK_SIZE*i,
-                    DrawRectanglePro(block, (Vector2){0,0}, 0.0f, BLUE);
+                    DrawRectanglePro(block, (Vector2){0,0}, 0.0f, color);
                 }
             }
         }
