@@ -4,7 +4,6 @@
 // #include "raymath.h"
 #include "vectormath2i.h"
 
-
 #define BLOCK_SIZE 20
 #define WELL_HEIGHT 20
 #define WELL_WIDTH 10
@@ -12,7 +11,7 @@
 #define HOLDER_SIZE 5
 
 static int staticBlocks[WELL_HEIGHT][WELL_WIDTH] = {{0}};
-Vector2i tetrisHolderPos = {WELL_WIDTH/2 - HOLDER_SIZE/2, 3};
+Vector2i tetrisHolderPos;
 
 void rotateGrid90(int src[HOLDER_SIZE][HOLDER_SIZE], int dest[HOLDER_SIZE][HOLDER_SIZE], int rotation) {
     // Normalize rotation to 0, 90, 180, 270
@@ -63,6 +62,9 @@ int main(void)
 
     // double startTime = GetTime();  // Record start time
 
+    Vector2i holderStartPos = {WELL_WIDTH/2 - HOLDER_SIZE/2, -3};
+    tetrisHolderPos = holderStartPos;
+
     Vector2 wellPosition = {60, 30};
 
     staticBlocks[19][9] = 1;
@@ -75,6 +77,47 @@ int main(void)
         {0, 0, 0, 0, 0}
     };
 
+    int zig[HOLDER_SIZE][HOLDER_SIZE] = {
+        {0, 0, 0, 0, 0},
+        {0, 0, 1, 1, 0},
+        {0, 1, 1, 0, 0},
+        {0, 0, 0, 0, 0},
+        {0, 0, 0, 0, 0}
+    };
+
+
+    int zag[HOLDER_SIZE][HOLDER_SIZE] = {
+        {0, 0, 0, 0, 0},
+        {0, 1, 1, 0, 0},
+        {0, 0, 1, 1, 0},
+        {0, 0, 0, 0, 0},
+        {0, 0, 0, 0, 0}
+    };
+
+    int el[HOLDER_SIZE][HOLDER_SIZE] = {
+        {0, 0, 0, 0, 0},
+        {0, 0, 1, 0, 0},
+        {0, 0, 1, 0, 0},
+        {0, 0, 1, 1, 0},
+        {0, 0, 0, 0, 0}
+    };
+
+    int le[HOLDER_SIZE][HOLDER_SIZE] = {
+        {0, 0, 0, 0, 0},
+        {0, 0, 1, 0, 0},
+        {0, 0, 1, 0, 0},
+        {0, 1, 1, 0, 0},
+        {0, 0, 0, 0, 0}
+    };
+
+    int square[HOLDER_SIZE][HOLDER_SIZE] = {
+        {0, 0, 0, 0, 0},
+        {0, 0, 0, 0, 0},
+        {0, 1, 1, 0, 0},
+        {0, 1, 1, 0, 0},
+        {0, 0, 0, 0, 0}
+    };
+
     int four[HOLDER_SIZE][HOLDER_SIZE] = {
         {0, 0, 0, 0, 0},
         {0, 0, 1, 0, 0},
@@ -82,6 +125,12 @@ int main(void)
         {0, 0, 1, 0, 0},
         {0, 0, 1, 0, 0}
     };
+
+    int (*shapes[7])[HOLDER_SIZE] = {
+        grib, zig, zag, el, le, square, four
+    };
+
+    // int emptyHolder[HOLDER_SIZE][HOLDER_SIZE] = {0};
     
     int tetrisHolder[HOLDER_SIZE][HOLDER_SIZE];
     memcpy(tetrisHolder, four, sizeof(grib));
@@ -93,14 +142,51 @@ int main(void)
     SetTargetFPS(60);
 
     while (!WindowShouldClose()) {
+        int newHolder[HOLDER_SIZE][HOLDER_SIZE] = {0};
         // double time = startTime - GetTime();
         lastTick -= GetFrameTime();
+        if(IsKeyPressed(KEY_DOWN)) {
+            lastTick = 0.0f;
+        }
+        Vector2i newPos = {0,0};
         if(lastTick <= 0.0f) {
-            tetrisHolderPos = Vector2iAdd(tetrisHolderPos, (Vector2i){0,1});
+            newPos = Vector2iAdd(tetrisHolderPos, (Vector2i){0,1});
+
+            if(!holderCollides(tetrisHolder, newPos)) {
+                tetrisHolderPos = newPos;
+            } else {
+                //add holder contett to static blocks
+                for (int y = 0; y < HOLDER_SIZE; y++) {
+                    for (int x = 0; x < HOLDER_SIZE; x++) {
+                        if(tetrisHolder[y][x]) {
+                            staticBlocks[y+tetrisHolderPos.y][x+tetrisHolderPos.x] = 1;
+                        }
+                    }
+                }
+                int newShapeIndex = GetRandomValue(0,6);
+                memcpy(tetrisHolder, shapes[newShapeIndex], sizeof(tetrisHolder));
+                tetrisHolderPos = holderStartPos;
+
+                //check for lines
+                for(int i = 0; i < WELL_HEIGHT; i++) {
+                    bool foundEmpty = false;
+                    for( int j = 0; j < WELL_WIDTH; j++) {
+                        if( !staticBlocks[i][j] ) {
+                            foundEmpty = true;
+                            break;
+                        }
+                    }
+                    if(!foundEmpty){
+                        //remove line
+                        for(int k = i-1; k > -1; k--) {
+                            memcpy(staticBlocks[k+1], staticBlocks[k], sizeof(staticBlocks[k]));
+                        }
+                    }
+                }
+            }
             lastTick = tickLength;
         }
 
-        int newHolder[HOLDER_SIZE][HOLDER_SIZE] = {0};
         if(IsKeyPressed(KEY_D)) {
             rotateGrid90(tetrisHolder, newHolder, 90);
             if(!holderCollides(newHolder, tetrisHolderPos)) {
@@ -113,7 +199,6 @@ int main(void)
                 memcpy(tetrisHolder, newHolder, sizeof(newHolder));
             }
         }
-        Vector2i newPos = {0,0};
         if(IsKeyPressed(KEY_RIGHT)) {
             newPos = Vector2iAdd(tetrisHolderPos, (Vector2i){1, 0});
             if(!holderCollides(tetrisHolder, newPos)) {
@@ -129,7 +214,7 @@ int main(void)
 
         BeginDrawing();
         ClearBackground(RAYWHITE);
-        DrawText("Hello, Raylib!", 190, 200, 20, LIGHTGRAY);
+        DrawText("Tetris! Raylib!", 190, 200, 20, LIGHTGRAY);
 
         
         for(int i = 0; i < WELL_HEIGHT; i++) {
