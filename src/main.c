@@ -1,5 +1,7 @@
 #include <string.h>
 #include <stdbool.h>
+#include <stdio.h>
+#include <math.h>
 #include "raylib.h"
 // #include "raymath.h"
 #include "vectormath2i.h"
@@ -67,7 +69,11 @@ int main(void)
 
     Vector2 wellPosition = {60, 30};
 
+    char pointText[100];
+
     staticBlocks[19][9] = 1;
+
+    int points = 0;
     
     int grib[HOLDER_SIZE][HOLDER_SIZE] = {
         {0, 0, 0, 0, 0},
@@ -155,6 +161,8 @@ int main(void)
             if(!holderCollides(tetrisHolder, newPos)) {
                 tetrisHolderPos = newPos;
             } else {
+                points += 10;
+
                 //add holder contett to static blocks
                 for (int y = 0; y < HOLDER_SIZE; y++) {
                     for (int x = 0; x < HOLDER_SIZE; x++) {
@@ -167,6 +175,7 @@ int main(void)
                 memcpy(tetrisHolder, shapes[newShapeIndex], sizeof(tetrisHolder));
                 tetrisHolderPos = holderStartPos;
 
+                int linesDeleted = 0;
                 //check for lines
                 for(int i = 0; i < WELL_HEIGHT; i++) {
                     bool foundEmpty = false;
@@ -181,8 +190,10 @@ int main(void)
                         for(int k = i-1; k > -1; k--) {
                             memcpy(staticBlocks[k+1], staticBlocks[k], sizeof(staticBlocks[k]));
                         }
+                        linesDeleted++;
                     }
                 }
+                points += (int)pow(2, linesDeleted-1) * 100;
             }
             lastTick = tickLength;
         }
@@ -213,31 +224,31 @@ int main(void)
         }
 
         BeginDrawing();
-        ClearBackground(RAYWHITE);
-        DrawText("Tetris! Raylib!", 190, 200, 20, LIGHTGRAY);
-
-        
-        for(int i = 0; i < WELL_HEIGHT; i++) {
-            for( int j = 0; j < WELL_WIDTH; j++) {
-                Rectangle rect = {wellPosition.x + j*BLOCK_SIZE, wellPosition.y + i*BLOCK_SIZE, BLOCK_SIZE, BLOCK_SIZE};
-                if(staticBlocks[i][j]) {
-                    DrawRectanglePro(rect, (Vector2){0,0}, 0.0f, RED);
-                } else {
-                    DrawRectangleLinesEx(rect, 3.0, LIGHTGRAY);
+            ClearBackground(RAYWHITE);
+            snprintf(pointText, 100, "points: %d", points );
+            DrawText(pointText, 300, 20, 30, LIGHTGRAY);
+            
+            for(int i = 0; i < WELL_HEIGHT; i++) {
+                for( int j = 0; j < WELL_WIDTH; j++) {
+                    Rectangle rect = {wellPosition.x + j*BLOCK_SIZE, wellPosition.y + i*BLOCK_SIZE, BLOCK_SIZE, BLOCK_SIZE};
+                    if(staticBlocks[i][j]) {
+                        DrawRectanglePro(rect, (Vector2){0,0}, 0.0f, RED);
+                    } else {
+                        DrawRectangleLinesEx(rect, 3.0, LIGHTGRAY);
+                    }
                 }
             }
-        }
 
-        Rectangle block ={0,0, BLOCK_SIZE, BLOCK_SIZE};
-        for(int i = 0; i < HOLDER_SIZE; i++) {
-            for(int j = 0; j < HOLDER_SIZE; j++){
-                if(tetrisHolder[i][j]) {
-                    block.x = wellPosition.x + tetrisHolderPos.x*BLOCK_SIZE + BLOCK_SIZE*j,
-                    block.y = wellPosition.y + tetrisHolderPos.y*BLOCK_SIZE + BLOCK_SIZE*i,
-                    DrawRectanglePro(block, (Vector2){0,0}, 0.0f, BLUE);
+            Rectangle block ={0,0, BLOCK_SIZE, BLOCK_SIZE};
+            for(int i = 0; i < HOLDER_SIZE; i++) {
+                for(int j = 0; j < HOLDER_SIZE; j++){
+                    if(tetrisHolder[i][j]) {
+                        block.x = wellPosition.x + tetrisHolderPos.x*BLOCK_SIZE + BLOCK_SIZE*j,
+                        block.y = wellPosition.y + tetrisHolderPos.y*BLOCK_SIZE + BLOCK_SIZE*i,
+                        DrawRectanglePro(block, (Vector2){0,0}, 0.0f, BLUE);
+                    }
                 }
             }
-        }
 
         EndDrawing();
     }
