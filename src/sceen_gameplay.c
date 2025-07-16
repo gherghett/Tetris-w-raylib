@@ -6,6 +6,7 @@
 // #include "raymath.h" this has vector2 math if needed
 #include "vectormath2i.h"
 #include "shapes.h"
+#include "screen_manager.h"
 
 #define BLOCK_SIZE 20
 #define WELL_HEIGHT 20
@@ -13,6 +14,14 @@
 
 #define HOLDER_SIZE 5
 
+typedef enum {
+    STATE_PLAYING,
+    STATE_GAME_OVER,
+    STATE_PAUSED
+} GameState;
+
+GameState currentState;
+GameState unPausedState;
 static int staticBlocks[WELL_HEIGHT][WELL_WIDTH] = {{0}};
 Vector2i tetrisHolderPos;
 static int screenWidth;
@@ -62,7 +71,9 @@ bool holderCollides(int holder[HOLDER_SIZE][HOLDER_SIZE], Vector2i position) {
                 if( x < 0 || x >= WELL_WIDTH || y >= WELL_HEIGHT)
                     return true;
     
-                if(staticBlocks[y][x]) 
+                
+                if(y >= 0 && y < WELL_HEIGHT && x >= 0 && x < WELL_WIDTH 
+                    && staticBlocks[y][x]) 
                     return true;
             }
         }
@@ -70,8 +81,73 @@ bool holderCollides(int holder[HOLDER_SIZE][HOLDER_SIZE], Vector2i position) {
     return false;
 }
 
+bool holderTooHigh(int holder[HOLDER_SIZE][HOLDER_SIZE], Vector2i position) {
+    for(int i = 0; i < HOLDER_SIZE; i++) {
+        for( int j = 0; j < HOLDER_SIZE; j++) {
+            int y = i+position.y;
+            if(holder[i][j]) {
+                if(y < 0 )
+                    return true;
+            }
+        }
+    }
+    return false;
+}
+
+void gameTick(void) {
+     //------------ONCE EVERY TICK-------------------------------
+    //move tetetrisshape down, or add it to staticBlocks
+    Vector2i newPos = Vector2iAdd(tetrisHolderPos, (Vector2i){0,1});
+    if(!holderCollides(tetrisHolder, newPos)) {
+        tetrisHolderPos = newPos;
+    } else {
+        tickLength = tickLength * 0.98f;
+        points += 10;
+        if(holderTooHigh(tetrisHolder, tetrisHolderPos)) {
+            // GAME OVER
+            currentState = STATE_GAME_OVER;
+            return;
+        }
+        //add holder content to static blocks
+        for (int y = 0; y < HOLDER_SIZE; y++) {
+            for (int x = 0; x < HOLDER_SIZE; x++) {
+                if(tetrisHolder[y][x]) {
+                    staticBlocks[y+tetrisHolderPos.y][x+tetrisHolderPos.x] = 1;
+                }
+            }
+        }
+        int newShapeIndex = GetRandomValue(0,6);
+        memcpy(tetrisHolder, shapes[newShapeIndex], sizeof(tetrisHolder));
+        tetrisHolderPos = holderStartPos;
+
+        int linesDeleted = 0;
+        //check for lines to delete
+        for(int i = 0; i < WELL_HEIGHT; i++) {
+            bool foundEmpty = false;
+            for( int j = 0; j < WELL_WIDTH; j++) {
+                if( !staticBlocks[i][j] ) {
+                    foundEmpty = true;
+                    break;
+                }
+            }
+            if(!foundEmpty){
+                //remove line by moving lines above down
+                for(int k = i-1; k > -1; k--) {
+                    memcpy(staticBlocks[k+1], staticBlocks[k], sizeof(staticBlocks[k]));
+                }
+                linesDeleted++;
+            }
+        }
+        points += (int)pow(3, linesDeleted-1) * 100;
+    }
+    //------------ TICK-------------------------------
+}
+
 void ScreenGameplay_Init(void)
 {
+    memset(staticBlocks, 0, sizeof(staticBlocks));    
+    
+    currentState = STATE_PLAYING;
     // double startTime = GetTime();  // Record start time
 
     screenWidth = 800;
@@ -108,80 +184,62 @@ void ScreenGameplay_Update(void) {
 
     Vector2i newPos = {0,0};
     if(lastTick <= 0.0f) {
-        //------------ONCE EVERY TICK-------------------------------
-
-        //move tetetrisshape down, or add it to staticBlocks
-        newPos = Vector2iAdd(tetrisHolderPos, (Vector2i){0,1});
-        if(!holderCollides(tetrisHolder, newPos)) {
-            tetrisHolderPos = newPos;
-        } else {
-            points += 10;
-            
-            //add holder content to static blocks
-            for (int y = 0; y < HOLDER_SIZE; y++) {
-                for (int x = 0; x < HOLDER_SIZE; x++) {
-                    if(tetrisHolder[y][x]) {
-                        staticBlocks[y+tetrisHolderPos.y][x+tetrisHolderPos.x] = 1;
-                    }
-                }
-            }
-            int newShapeIndex = GetRandomValue(0,6);
-            memcpy(tetrisHolder, shapes[newShapeIndex], sizeof(tetrisHolder));
-            tetrisHolderPos = holderStartPos;
-
-            int linesDeleted = 0;
-            //check for lines to delete
-            for(int i = 0; i < WELL_HEIGHT; i++) {
-                bool foundEmpty = false;
-                for( int j = 0; j < WELL_WIDTH; j++) {
-                    if( !staticBlocks[i][j] ) {
-                        foundEmpty = true;
-                        break;
-                    }
-                }
-                if(!foundEmpty){
-                    //remove line by moving lines above down
-                    for(int k = i-1; k > -1; k--) {
-                        memcpy(staticBlocks[k+1], staticBlocks[k], sizeof(staticBlocks[k]));
-                    }
-                    linesDeleted++;
-                }
-            }
-            points += (int)pow(2, linesDeleted-1) * 100;
+        switch (currentState) {
+            case STATE_PLAYING: gameTick(); break;
+            default: break;
         }
         lastTick = tickLength;
-        //------------ TICK-------------------------------
     }
 
     //Input handling -----------------------------------------
-
-    //Rotation
-    int newHolder[HOLDER_SIZE][HOLDER_SIZE] = {0};
-    if(IsKeyPressed(KEY_D)) {
-        rotateGrid90(tetrisHolder, newHolder, 90);
-        if(!holderCollides(newHolder, tetrisHolderPos)) {
-            memcpy(tetrisHolder, newHolder, sizeof(newHolder));
-        }
-    }
-    if(IsKeyPressed(KEY_A)) {
-        rotateGrid90(tetrisHolder, newHolder, 270);
-        if(!holderCollides(newHolder, tetrisHolderPos)) {
-            memcpy(tetrisHolder, newHolder, sizeof(newHolder));
+    if(IsKeyPressed(KEY_P)) {
+        if(currentState == STATE_PAUSED) {
+            currentState = unPausedState;
+        } else {
+            unPausedState = currentState;
+            currentState = STATE_PAUSED;
         }
     }
 
-    //left right
-    if(IsKeyPressed(KEY_RIGHT)) {
-        newPos = Vector2iAdd(tetrisHolderPos, (Vector2i){1, 0});
-        if(!holderCollides(tetrisHolder, newPos)) {
-            tetrisHolderPos = newPos;
+    switch (currentState) {
+        case STATE_PLAYING: {
+            //Rotation
+            int newHolder[HOLDER_SIZE][HOLDER_SIZE] = {0};
+            if(IsKeyPressed(KEY_D)) {
+                rotateGrid90(tetrisHolder, newHolder, 90);
+                if(!holderCollides(newHolder, tetrisHolderPos)) {
+                    memcpy(tetrisHolder, newHolder, sizeof(newHolder));
+                }
+            }
+            if(IsKeyPressed(KEY_A)) {
+                rotateGrid90(tetrisHolder, newHolder, 270);
+                if(!holderCollides(newHolder, tetrisHolderPos)) {
+                    memcpy(tetrisHolder, newHolder, sizeof(newHolder));
+                }
+            }
+
+            //left right
+            if(IsKeyPressed(KEY_RIGHT)) {
+                newPos = Vector2iAdd(tetrisHolderPos, (Vector2i){1, 0});
+                if(!holderCollides(tetrisHolder, newPos)) {
+                    tetrisHolderPos = newPos;
+                }
+            }
+            if(IsKeyPressed(KEY_LEFT)) {
+                newPos = Vector2iAdd(tetrisHolderPos, (Vector2i){-1,0});
+                if(!holderCollides(tetrisHolder, newPos)) {
+                    tetrisHolderPos = newPos;
+                }
+            }
+            break;
         }
-    }
-    if(IsKeyPressed(KEY_LEFT)) {
-        newPos = Vector2iAdd(tetrisHolderPos, (Vector2i){-1,0});
-        if(!holderCollides(tetrisHolder, newPos)) {
-            tetrisHolderPos = newPos;
+        case STATE_GAME_OVER: {
+            if(IsKeyPressed(KEY_ENTER)) {
+                ChangeToScreen(SCREEN_GAMEPLAY);
+            }
+            break;
         }
+        default: break;
     }
     //--------------------------------------------------------------
 }
@@ -216,6 +274,13 @@ void ScreenGameplay_Draw(void) {
                 }
             }
         }
+
+        if(currentState == STATE_PAUSED)
+            DrawText("PAUSED", 300, 20, 120, BLACK);
+
+        if(currentState == STATE_GAME_OVER)
+            DrawText("GAME OVER\npress enter to restart", 30, 100, 120, BLACK);
+
 
     EndDrawing();
 

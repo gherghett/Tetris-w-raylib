@@ -11,7 +11,7 @@ int main(void)
     InitWindow(screenWidth, screenHeight, "Tetris");
     SetTargetFPS(60);
 
-    ChangeToScreen(SCREEN_GAMEPLAY);
+    ChangeToScreen(SCREEN_MENU);
 
     while (!WindowShouldClose()) {
         //-------------- INIT ---------------------------------
