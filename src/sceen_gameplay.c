@@ -15,6 +15,9 @@
 
 #define HOLDER_SIZE 5
 
+#define DOWNPRESS_COOLDOWN_START 0.25 
+#define DOWNPRESS_COOLDOWN 0.04
+
 typedef enum {
     STATE_PLAYING,
     STATE_GAME_OVER,
@@ -42,6 +45,15 @@ Color LighterColors[4] = {
 
 GameState currentState;
 GameState unPausedState;
+
+Sound blip;
+Sound land;
+Sound clear;
+Sound rotate;
+Sound down;
+
+Music stackingTime;
+
 static int staticBlocks[WELL_HEIGHT][WELL_WIDTH] = {{0}};
 Vector2i tetrisHolderPos;
 static int nextPiece;
@@ -55,6 +67,14 @@ static int tetrisHolder[HOLDER_SIZE][HOLDER_SIZE];
 static float tickLength;
 static float lastTick;
 static bool newHighScore;
+
+static float downPressCoolDown;
+static float leftPressCoolDown;
+static float rightPressCoolDown;
+
+//for clear soundeffect
+static float timerClear;
+static int cleared;
 
 void rotateGrid90(int src[HOLDER_SIZE][HOLDER_SIZE], int dest[HOLDER_SIZE][HOLDER_SIZE], int rotation) {
     // Normalize rotation to 0, 90, 180, 270
@@ -159,6 +179,7 @@ void DrawBlockInWell(int x, int y, BlockColor color) {
 void gameTick(void) {
      //------------ONCE EVERY TICK-------------------------------
     //move tetetrisshape down, or add it to staticBlocks
+    // PlaySound(down);
     Vector2i newPos = Vector2iAdd(tetrisHolderPos, (Vector2i){0,1});
     if(!holderCollides(tetrisHolder, newPos)) {
         tetrisHolderPos = newPos;
@@ -209,12 +230,34 @@ void gameTick(void) {
             }
         }
         points += (int)pow(3, linesDeleted-1) * 100;
+        PlaySound(land);
+        cleared = 4 - linesDeleted; //this will play sound effect
     }
     //------------ TICK-------------------------------
 }
 
 void ScreenGameplay_Init(void)
 {
+    // Check if the sound file exists before loading
+    if (FileExists("resources/blip.wav")) {
+        blip = LoadSound("resources/blip.wav");
+    } else {
+        // Handle the case where file is not found
+        printf("Warning: Could not find resources/blip.wav\n");
+        // Initialize with a dummy sound or handle gracefully
+    }
+    land = LoadSound("resources/land.wav");
+    clear = LoadSound("resources/clear.wav");
+    down = LoadSound("resources/down.wav");
+    rotate = LoadSound("resources/rotate.wav");
+
+    stackingTime = LoadMusicStream("resources/stacking_time.mp3");
+    SetMusicVolume(stackingTime, 0.4);
+    // PlayMusicStream(stackingTime);
+
+    timerClear = 0.0f;
+    cleared = 4; //four means its done, 
+
     memset(staticBlocks, 0, sizeof(staticBlocks));    
     
     currentState = STATE_PLAYING;
@@ -243,6 +286,10 @@ void ScreenGameplay_Init(void)
 
     // InitWindow(screenWidth, screenHeight, "Tetris");
     // SetTargetFPS(60);
+
+    downPressCoolDown = 0.0;
+    leftPressCoolDown = 0.0;
+    rightPressCoolDown = 0.0;
 }
 
 void ScreenGameplay_Update(void) {
@@ -251,9 +298,8 @@ void ScreenGameplay_Update(void) {
     //--------------------------------------------------------------
     lastTick -= GetFrameTime();
 
-    if(IsKeyPressed(KEY_DOWN)) {
-        lastTick = 0.0f;
-    }
+    UpdateMusicStream(stackingTime);   // Update music buffer with new stream data
+
 
     Vector2i newPos = {0,0};
     if(lastTick <= 0.0f) {
@@ -266,6 +312,7 @@ void ScreenGameplay_Update(void) {
 
     //Input handling -----------------------------------------
     if(IsKeyPressed(KEY_P)) {
+        
         if(currentState == STATE_PAUSED) {
             currentState = unPausedState;
         } else {
@@ -276,15 +323,29 @@ void ScreenGameplay_Update(void) {
 
     switch (currentState) {
         case STATE_PLAYING: {
+            if(IsKeyPressed(KEY_DOWN)) {
+                lastTick = 0.0f;
+                PlaySound(blip);
+                downPressCoolDown = DOWNPRESS_COOLDOWN_START;
+            }
+            downPressCoolDown -= GetFrameTime();
+            if(IsKeyDown(KEY_DOWN) && downPressCoolDown <= 0.0) {
+                lastTick = 0.0f;
+                PlaySound(blip);
+                downPressCoolDown = DOWNPRESS_COOLDOWN;
+            }
+
             //Rotation
             int newHolder[HOLDER_SIZE][HOLDER_SIZE] = {0};
             if(IsKeyPressed(KEY_D)) {
+                PlaySound(rotate);
                 rotateGrid90(tetrisHolder, newHolder, 90);
                 if(!holderCollides(newHolder, tetrisHolderPos)) {
                     memcpy(tetrisHolder, newHolder, sizeof(newHolder));
                 }
             }
             if(IsKeyPressed(KEY_A) || IsKeyPressed(KEY_UP)) {
+                PlaySound(rotate);
                 rotateGrid90(tetrisHolder, newHolder, 270);
                 if(!holderCollides(newHolder, tetrisHolderPos)) {
                     memcpy(tetrisHolder, newHolder, sizeof(newHolder));
@@ -293,16 +354,39 @@ void ScreenGameplay_Update(void) {
 
             //left right
             if(IsKeyPressed(KEY_RIGHT)) {
+                PlaySound(blip);
                 newPos = Vector2iAdd(tetrisHolderPos, (Vector2i){1, 0});
                 if(!holderCollides(tetrisHolder, newPos)) {
                     tetrisHolderPos = newPos;
                 }
+                rightPressCoolDown = DOWNPRESS_COOLDOWN_START;
             }
+            rightPressCoolDown -= GetFrameTime();
+            if(IsKeyDown(KEY_RIGHT) && rightPressCoolDown <= 0.0) {
+                PlaySound(blip);
+                newPos = Vector2iAdd(tetrisHolderPos, (Vector2i){1, 0});
+                if(!holderCollides(tetrisHolder, newPos)) {
+                    tetrisHolderPos = newPos;
+                }
+                rightPressCoolDown = DOWNPRESS_COOLDOWN;
+            }
+
             if(IsKeyPressed(KEY_LEFT)) {
+                PlaySound(blip);
                 newPos = Vector2iAdd(tetrisHolderPos, (Vector2i){-1,0});
                 if(!holderCollides(tetrisHolder, newPos)) {
                     tetrisHolderPos = newPos;
                 }
+                leftPressCoolDown = DOWNPRESS_COOLDOWN_START;
+            }
+            leftPressCoolDown -= GetFrameTime();
+            if(IsKeyDown(KEY_LEFT) && leftPressCoolDown <= 0.0) {
+                PlaySound(blip);
+                newPos = Vector2iAdd(tetrisHolderPos, (Vector2i){-1,0});
+                if(!holderCollides(tetrisHolder, newPos)) {
+                    tetrisHolderPos = newPos;
+                }
+                leftPressCoolDown = DOWNPRESS_COOLDOWN;
             }
             break;
         }
@@ -314,6 +398,18 @@ void ScreenGameplay_Update(void) {
         }
         default: break;
     }
+
+    if(cleared < 4) {
+        timerClear -= GetFrameTime();
+        if(timerClear <= 0.0f) {
+            SetSoundPitch(clear, 1.0 + 0.2
+                 * cleared);
+            PlaySound(clear);
+            cleared++;
+            timerClear = 0.4f;
+        }
+    }
+
     //--------------------------------------------------------------
 }
 
@@ -370,4 +466,13 @@ void ScreenGameplay_Draw(void) {
     //--------------------------------------------------------------
 }
 
-void ScreenGameplay_Unload(void){}
+void ScreenGameplay_Unload(void){
+    StopMusicStream(stackingTime);
+
+    UnloadSound(blip);
+    UnloadSound(land);
+    UnloadSound(clear);
+    UnloadSound(rotate);
+    UnloadSound(down);
+    UnloadMusicStream(stackingTime);
+}

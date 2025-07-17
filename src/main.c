@@ -8,6 +8,7 @@ int main(void)
     int screenWidth = 800;
     int screenHeight = 480;
 
+    InitAudioDevice();
     InitWindow(screenWidth, screenHeight, "Tetris");
     SetTargetFPS(60);
 
@@ -33,6 +34,7 @@ int main(void)
     //clean up
     Unload();
 
+    CloseAudioDevice();
     CloseWindow();
     return 0;
 }
